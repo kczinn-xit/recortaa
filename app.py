@@ -2,6 +2,7 @@ import json, os, re, shutil, subprocess, threading, uuid
 from pathlib import Path
 from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).parent.resolve()
@@ -144,4 +145,9 @@ def get_job(jid: str):
 
 
 app.mount("/files", StaticFiles(directory=DATA), name="files")
-app.mount("/", StaticFiles(directory=ROOT / "static", html=True), name="static")
+INDEX = next(p for p in (ROOT / "static" / "index.html", ROOT / "index.html") if p.exists())
+
+
+@app.get("/")
+def home():
+    return FileResponse(INDEX)
