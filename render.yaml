@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: recorta
+    runtime: docker
+    plan: standard
+    healthCheckPath: /
+    envVars:
+      - key: WHISPER_MODEL
+        value: base
+      - key: ANTHROPIC_API_KEY
+        sync: false
