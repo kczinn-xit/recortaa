@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recorta — vídeos longos em cortes verticais</title>
+<style>
+:root{--bg:#EEF1F6;--ink:#1B2433;--mute:#5D6B82;--line:#CBD3E0;--acc:#E0457B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI","Avenir Next",system-ui,sans-serif}
+main{display:grid;grid-template-columns:340px 1fr;gap:32px;max-width:1200px;margin:0 auto;padding:32px 20px}
+@media(max-width:800px){main{grid-template-columns:1fr}}
+h1{font:800 34px/1.1 "Trebuchet MS",sans-serif;letter-spacing:-.02em;margin:0 0 8px}
+.sub{color:var(--mute);margin:0 0 24px}
+form{display:grid;gap:14px;align-self:start}
+label{display:grid;gap:4px;font-weight:600;font-size:14px}
+input,button{font:inherit}
+input[type=text],input[type=number]{padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;background:#fff;width:100%}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center;cursor:pointer;color:var(--mute)}
+.drop.on{border-color:var(--acc);color:var(--ink)}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:12px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5;cursor:wait}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:6px 0 20px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
+#st{font-weight:600}#err{color:#B3261E;font-weight:600}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:20px}
+.clip{background:#fff;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.clip video{width:100%;aspect-ratio:9/16;background:#000;display:block}
+.clip div{padding:12px}.clip b{display:block;margin-bottom:4px}.clip small{color:var(--mute);display:block;margin-bottom:6px}
+.score{float:right;background:var(--ink);color:#fff;border-radius:6px;padding:0 8px;font-weight:700;margin-left:8px}
+.clip a{color:var(--acc);font-weight:700;text-decoration:none}
+</style></head><body><main>
+<form id="f">
+  <div><h1>Recorta</h1><p class="sub">Transforme um vídeo longo em cortes verticais com legendas.</p></div>
+  <label class="drop" id="drop" tabindex="0">Solte o vídeo aqui ou clique para escolher
+    <input id="file" type="file" accept="video/*,audio/*" hidden></label>
+  <label>Ou cole um link (YouTube, etc.)<input type="text" id="url" placeholder="https://..."></label>
+  <div class="row">
+    <label>Clipes<input type="number" id="n" value="5" min="1" max="15"></label>
+    <label>Mín. (s)<input type="number" id="lo" value="30" min="10" max="120"></label>
+    <label>Máx. (s)<input type="number" id="hi" value="60" min="15" max="180"></label>
+  </div>
+  <button id="go">Gerar clipes</button>
+</form>
+<section>
+  <div id="st">Escolha um vídeo para começar.</div>
+  <div class="bar"><i id="bar"></i></div>
+  <div id="err"></div>
+  <div id="grid"></div>
+</section></main>
+<script>
+const $=id=>document.getElementById(id);let shown=0;
+$("drop").onclick=()=>$("file").click();
+$("drop").onkeydown=e=>{if(e.key==="Enter")$("file").click()};
+$("file").onchange=()=>{const f=$("file").files[0];$("drop").textContent=f?f.name:"Solte o vídeo aqui ou clique para escolher";$("drop").classList.toggle("on",!!f)};
+["dragover","drop"].forEach(t=>$("drop").addEventListener(t,e=>{e.preventDefault();if(t==="drop"){$("file").files=e.dataTransfer.files;$("file").onchange()}}));
+$("f").onsubmit=async e=>{
+  e.preventDefault();$("err").textContent="";$("grid").innerHTML="";shown=0;
+  const fd=new FormData(),f=$("file").files[0];
+  if(f)fd.append("file",f);else fd.append("url",$("url").value);
+  fd.append("clips",$("n").value);fd.append("min_len",$("lo").value);fd.append("max_len",$("hi").value);
+  $("go").disabled=true;$("st").textContent="Enviando…";
+  try{
+    const r=await fetch("/api/jobs",{method:"POST",body:fd});
+    if(!r.ok)throw new Error((await r.json()).detail||"Falha ao enviar.");
+    poll((await r.json()).id);
+  }catch(x){$("err").textContent=x.message;$("st").textContent="";$("go").disabled=false}
+};
+async function poll(id){
+  const j=await (await fetch("/api/jobs/"+id)).json();
+  $("st").textContent=j.status;$("bar").style.width=j.progress+"%";
+  j.clips.slice(shown).forEach(c=>{
+    const d=document.createElement("div");d.className="clip";
+    d.innerHTML=`<video src="${c.url}" controls playsinline preload="metadata"></video><div><span class="score">${c.score}</span><b></b><small></small><a href="${c.url}" download>Baixar clipe</a></div>`;
+    d.querySelector("b").textContent=c.title;
+    d.querySelector("small").textContent=`${c.start}s–${c.end}s · ${c.reason}`;
+    $("grid").appendChild(d);
+  });
+  shown=j.clips.length;
+  if(j.done){$("go").disabled=false;if(j.error)$("err").textContent=j.error}else setTimeout(()=>poll(id),2000);
+}
+</script></body></html>
